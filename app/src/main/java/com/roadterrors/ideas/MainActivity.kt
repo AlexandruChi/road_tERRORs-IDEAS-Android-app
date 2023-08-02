@@ -28,7 +28,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.Socket
 
-enum class ViewMode {Login, Main, Race, Debug, Test}
+enum class ViewMode { Login, Main, Race, Debug, Test }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,8 +45,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun RoverScreen(modifier: Modifier = Modifier) {
-    var viewMode: ViewMode by remember{ mutableStateOf(ViewMode.Login) }
-    val setViewMode: (ViewMode) -> Unit = {viewMode = it}
+    var viewMode: ViewMode by remember { mutableStateOf(ViewMode.Login) }
+    val setViewMode: (ViewMode) -> Unit = { viewMode = it }
 
     var socket: Socket? = null
     var input: InputStream? = null
@@ -57,30 +57,43 @@ fun RoverScreen(modifier: Modifier = Modifier) {
         output = socket!!.getOutputStream()
         true
     }
-    val disconnect: () -> Boolean = {socket?.close(); true}
+    val disconnect: () -> Boolean = { socket?.close(); true }
     val send: (String) -> Unit = { output?.write(it.toByteArray()) }
     val recv: () -> String = { input?.readBytes().toString() }
+    val test: () -> Boolean = { true }
 
     when (viewMode) {
-        ViewMode.Login -> { LoginMenu(login = connect, setViewMode = setViewMode) }
-        ViewMode.Main -> { MainMenu(logout = disconnect, setViewMode = setViewMode) }
+        ViewMode.Login -> {
+            LoginMenu(login = connect, setViewMode = setViewMode)
+        }
+
+        ViewMode.Main -> {
+            MainMenu(logout = disconnect, setViewMode = setViewMode)
+        }
+
         ViewMode.Race -> {
-            RoverControl(send = send, recv = recv, debug = false, setViewMode = setViewMode)
+            RoverControl(
+                send = send, recv = recv, test = test, debug = false, setViewMode = setViewMode
+            )
         }
+
         ViewMode.Debug -> {
-            RoverControl(send = send, recv = recv, debug = true, setViewMode = setViewMode)
+            RoverControl(
+                send = send, recv = recv, test = test, debug = true, setViewMode = setViewMode
+            )
         }
-        ViewMode.Test -> { TestMenu(setViewMode = setViewMode) }
+
+        ViewMode.Test -> {
+            TestMenu(setViewMode = setViewMode)
+        }
     }
 }
 
 @Composable
 fun LoginMenu(
-    login: () -> Boolean,
-    setViewMode: (ViewMode) -> Unit,
-    modifier: Modifier = Modifier
+    login: () -> Boolean, setViewMode: (ViewMode) -> Unit, modifier: Modifier = Modifier
 ) {
-    Column (
+    Column(
         modifier = modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -99,9 +112,7 @@ fun LoginMenu(
 
 @Composable
 fun MainMenu(
-    logout: () -> Boolean,
-    setViewMode: (ViewMode) -> Unit,
-    modifier: Modifier = Modifier
+    logout: () -> Boolean, setViewMode: (ViewMode) -> Unit, modifier: Modifier = Modifier
 ) {
     Column {
         Button(onClick = { setViewMode(ViewMode.Race) }) {
@@ -126,14 +137,21 @@ fun MainMenu(
 fun RoverControl(
     send: (String) -> Unit,
     recv: () -> String,
+    test: () -> Boolean,
     debug: Boolean,
     setViewMode: (ViewMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column (modifier = modifier.fillMaxSize()) {
-        ActionMenu(send = send, debug = debug, setViewMode = setViewMode)
-        Row (modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            Text(text = if (debug) {"debug"} else {"race"})
+    Column(modifier = modifier.fillMaxSize()) {
+        ActionMenu(send = send, test = test, debug = debug, setViewMode = setViewMode)
+        Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Text(
+                text = if (debug) {
+                    "debug"
+                } else {
+                    "race"
+                }
+            )
         }
         RoverData(debug = debug)
     }
@@ -156,35 +174,35 @@ fun RoverData(debug: Boolean, modifier: Modifier = Modifier) {
 @Composable
 fun ActionMenu(
     send: (String) -> Unit,
+    test: () -> Boolean,
     debug: Boolean,
     setViewMode: (ViewMode) -> Unit,
     modifier: Modifier = Modifier,
     buttonPatting: Int = 5
 ) {
-    Row (modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
         Button(
-            onClick = { setViewMode(ViewMode.Main) },
-            modifier.padding(buttonPatting.dp)
+            onClick = { setViewMode(ViewMode.Main) }, modifier.padding(buttonPatting.dp)
         ) {
             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = null)
         }
         if (debug) {
             Button(
                 onClick = {
-                    if (false) {
+                    if (test()) {
                         setViewMode(ViewMode.Test)
                     } else {
                         printError("Rover must be stopped")
-                    }},
-                modifier.padding(buttonPatting.dp)
+                    }
+                }, modifier.padding(buttonPatting.dp)
             ) {
                 Text(text = "TEST")
             }
         }
-        Button(onClick = { /*TODO*/ }, modifier.padding(buttonPatting.dp)) {
+        Button(onClick = { send("START") }, modifier.padding(buttonPatting.dp)) {
             Text(text = "START")
         }
-        Button(onClick = { /*TODO*/ }, modifier.padding(buttonPatting.dp)) {
+        Button(onClick = { send("STOP") }, modifier.padding(buttonPatting.dp)) {
             Text(text = "STOP")
         }
     }
@@ -192,7 +210,7 @@ fun ActionMenu(
 
 @Composable
 fun PrintRoverData(debug: Boolean, modifier: Modifier = Modifier) {
-    
+
 }
 
 fun printError(message: String) {
