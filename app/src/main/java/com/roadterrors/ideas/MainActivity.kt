@@ -1,7 +1,5 @@
 package com.roadterrors.ideas
 
-import android.graphics.drawable.shapes.RoundRectShape
-import android.graphics.drawable.shapes.Shape
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,7 +15,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,16 +24,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.textInputServiceFactory
 import androidx.compose.ui.unit.dp
 import com.roadterrors.ideas.ui.theme.IDEASTheme
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.Socket
+import java.util.Timer
+import java.util.TimerTask
 
 enum class ViewMode { Login, Main, Race, Debug, Test }
+enum class Tests { Photo }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,7 +72,7 @@ class Connection(private val ip: String, private val port: Int) : Thread() {
 
     @Synchronized
     fun close() {
-        connected = false;
+        connected = false
         socket.close()
     }
 
@@ -95,7 +93,7 @@ class Connection(private val ip: String, private val port: Int) : Thread() {
 }
 
 @Composable
-fun RoverScreen(modifier: Modifier = Modifier) {
+fun RoverScreen() {
     var viewMode: ViewMode by remember { mutableStateOf(ViewMode.Login) }
     val setViewMode: (ViewMode) -> Unit = { viewMode = it }
 
@@ -151,7 +149,10 @@ fun RoverScreen(modifier: Modifier = Modifier) {
         }
 
         ViewMode.Test -> {
-            TestMenu(setViewMode = setViewMode)
+            TestMenu(send = { connection?.send(it) },
+                recv = { connection?.recv() ?: "" },
+                setViewMode = setViewMode
+            )
         }
     }
 
@@ -189,13 +190,14 @@ fun MainMenu(
     logout: () -> Boolean,
     setViewMode: (ViewMode) -> Unit,
     printError: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buttonModifier: Modifier = modifier.padding(horizontal = 5.dp)
 ) {
     Column {
-        Button(onClick = { setViewMode(ViewMode.Race) }) {
+        Button(onClick = { setViewMode(ViewMode.Race) }, modifier = buttonModifier) {
             Text(text = "RACE")
         }
-        Button(onClick = { setViewMode(ViewMode.Debug) }) {
+        Button(onClick = { setViewMode(ViewMode.Debug) }, modifier = buttonModifier) {
             Text(text = "DEBUG")
         }
         Button(onClick = {
@@ -204,7 +206,7 @@ fun MainMenu(
             } else {
                 printError("Stop rover before disconnecting")
             }
-        }) {
+        }, modifier = buttonModifier) {
             Text(text = "EXIT")
         }
     }
@@ -243,10 +245,63 @@ fun RoverControl(
 }
 
 @Composable
-fun TestMenu(setViewMode: (ViewMode) -> Unit, modifier: Modifier = Modifier) {
-    Column {
-        Button(onClick = { setViewMode(ViewMode.Debug) }) {
+fun TestMenu(
+    send: (String) -> Unit,
+    recv: () -> String,
+    setViewMode: (ViewMode) -> Unit,
+    modifier: Modifier = Modifier,
+    buttonModifier: Modifier = modifier.padding(horizontal = 5.dp)
+) {
+    var currentTest: Tests? by remember { mutableStateOf(null) }
+    val setCurrentTest: (Tests?) -> Unit = { currentTest = it }
+
+    when (currentTest) {
+        null -> {
+            Column {
+                Button(onClick = { setViewMode(ViewMode.Debug) }, modifier = buttonModifier) {
+                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = null)
+                }
+                Button(onClick = { setCurrentTest(Tests.Photo) }, modifier = buttonModifier) {
+                    Text(text = "PHOTO")
+                }
+            }
+        }
+
+        Tests.Photo -> {
+            PhotoTest(send = send, setCurrentTest = setCurrentTest)
+        }
+    }
+}
+
+@Composable
+fun PhotoTest(
+    send: (String) -> Unit, setCurrentTest: (Tests?) -> Unit, modifier: Modifier = Modifier
+) {
+    var running: Boolean by remember { mutableStateOf(false) }
+
+    val timer = Timer()
+    val timerTask = object : TimerTask() {
+        override fun run() {
+            send("PHOTO")
+        }
+    }
+
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Button(onClick = { setCurrentTest(null) }) {
             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = null)
+        }
+        if (!running) {
+            Button(onClick = { running = true; timer.schedule(timerTask, 1000) }) {
+                Text(text = "START")
+            }
+        } else {
+            Button(onClick = { running = false; timerTask.cancel() }) {
+                Text(text = "STOP")
+            }
         }
     }
 }
@@ -262,14 +317,21 @@ fun RoverData(
 ) {
     var roverData: String by remember { mutableStateOf("") }
 
-    send(
-        if (debug) {
-            "DEBUG"
-        } else {
-            "DATA"
+    val timer = Timer()
+    val timerTask = object : TimerTask() {
+        override fun run() {
+            send(
+                if (debug) {
+                    "DEBUG"
+                } else {
+                    "DATA"
+                }
+            )
+            roverData = recv()
         }
-    )
-    roverData = recv()
+    }
+
+    timer.schedule(timerTask, 1000)
 
     Column(modifier = modifier.fillMaxSize()) {
         Card(
@@ -294,12 +356,11 @@ fun ActionMenu(
     printError: (String) -> Unit,
     setViewMode: (ViewMode) -> Unit,
     modifier: Modifier = Modifier,
-    buttonPatting: Int = 5
+    buttonModifier: Modifier = modifier.padding(horizontal = 5.dp)
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
         Button(
-            onClick = { setViewMode(ViewMode.Main) },
-            modifier.padding(horizontal = buttonPatting.dp)
+            onClick = { setViewMode(ViewMode.Main) }, modifier = buttonModifier
         ) {
             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = null)
         }
@@ -311,15 +372,19 @@ fun ActionMenu(
                     } else {
                         printError("Rover must be stopped")
                     }
-                }, modifier.padding(horizontal = buttonPatting.dp)
+                }, modifier = buttonModifier
             ) {
                 Text(text = "TEST")
             }
         }
-        Button(onClick = { send("START") }, modifier.padding(horizontal = buttonPatting.dp)) {
+        Button(
+            onClick = { send("START") }, modifier = buttonModifier
+        ) {
             Text(text = "START")
         }
-        Button(onClick = { send("STOP") }, modifier.padding(horizontal = buttonPatting.dp)) {
+        Button(
+            onClick = { send("STOP") }, modifier = buttonModifier
+        ) {
             Text(text = "STOP")
         }
     }
